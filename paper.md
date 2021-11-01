@@ -156,8 +156,8 @@ We trained models using the Adam optimizer [@kingma2014adam] and set the learnin
 ## Results
 To validate our method, we visualize the result of decomposed representations using t-SNE [@van2008visualizing].
 After training with the MUSDB18 training dataset, we obtained decomposed representations of single-source tracks in the MUSDB18 test dataset.
-Then we apply t-SNE to the set of representations as shown in \autoref{fig:tSNE}.
-In \autoref{fig:tSNE}, each color means different sources and the dots are the decomposed representations.
+Then we apply t-SNE to the set of representations as shown in Figure 2.
+In Figure 2, each color means different sources and the dots are the decomposed representations.
 It can be examined that the latent vectors from the same sources tend to be clustered even though there is no constraint about the classification.
 It indicates that our method has learned source-aware representations.
 
