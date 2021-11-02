@@ -101,7 +101,7 @@ where $q_i$ is the quantized representation of the $i$-th source, $e$ are the di
 One limitation of the latent quantization approach is the restricted expressive power compared to continuous latent space approaches.
 To increase the expressive power, we could have increased the number of elements in a codebook.
 However, this method could raise memory issues.
-Instead, we use multiple codebooks and construct each $q_s$ with a combination of quantized vectors $e^{(h)}$ ([h \in \[1,H\]])$, where h is the codebook index.
+Instead, we use multiple codebooks and construct each $q_s$ with a combination of quantized vectors $e^{(h)}$ ([h \in [1,H]])$, where h is the codebook index.
 
 $$ q_i=[(e^*)^{(1)}, ..., (e^*)^{(H)}]$$ 
 
