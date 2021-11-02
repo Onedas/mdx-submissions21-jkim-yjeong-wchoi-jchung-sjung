@@ -72,13 +72,13 @@ Therefore, we choose a VAE-based model to extract meaningful representation from
 # Proposed Methods
 
 When a mixture audio is given, we aim to learn quantized representations that can be decomposed into $n$ vectors, where $n$ denotes the number of sources.
-We denote the given source set as $S=\{s_i\}_{i=1}^n$ and condition vectors $C = (c_0, c_1, ..., c_n )$, where $s_i \in S$ is the $i^{th}$ source and $c_i\in \{0,1\}$ is a binary mask that determines whether each source is entered into the mixture. We formulate the mixture audio $\mathcal{M}(S,C)$ as follows:
-$$ \mathcal{M}(S,C) = \sum_{i}^{n} c_i \cdot s_i$$
+We denote the given source set as $S=\{s_i\}_{i=1}^n$, where $s_i \in S$ is the $i^{th}$ source. We formulate the mixture audio $\mathcal{M}(S)$ as follows:
+$$ \mathcal{M}(S) = \sum_{i}^{n} s_i$$
 
 In the following section, we describe our method for learning decomposed latent representations.
 Figure 1 describes the overall idea of the proposed model.
 
-![architecture](figs/Figure2.png){width=100%}
+![Illustration of the proposed method.](figs/Figure2.png){width=100%}
 
 ## Latent Quantization
 We quantize latent vectors by adopting the vector quantization method proposed in [@oord2017neural].
@@ -86,51 +86,46 @@ In this original VQ-VAE [@oord2017neural], straight-through estimation was used,
 $$ y_{i,j} = \frac{\exp((z_{i,j} + g_j) / \tau ) }{\sum_{k}^{m}\exp((z_{i,k} + g_k)/\tau) }$$
 while $\tau$ is a non-negative temperature, $g$ are categorical distribution from $n= -log(-log(u))$, and $u$ are uniform samples from uniform distribution $\mathcal{U}(0,1)$.
 
-During training, Gumbel softmax estimation stochastically maps the representation of the encoder output to discrete latent in the codebook.
-For this reason, features in the encoder are selected stochastically rather than deterministically in the codebook.
+During training, Gumbel softmax estimation stochastically maps the representation of the encoder output to the discrete latents. In other words, $q_i$ is a weighted sum of all discrete latents.
 This way it is easier to compute the gradients and can simply implement the reparameterization trick that approximates the categorical distributions. 
-However, during the inference, we deterministically choose one discrete latent in the codebook.
+However, during inference we deterministically choose one discrete latent in the codebook.
 
 $$ q_i =\begin{cases}
-   [e_1, e_2, ... e_m ] \otimes y_i &\quad \text{if train step} \\
+   [e_1, e_2, ... e_m] \otimes y_i &\quad \text{if train step} \\
    e^*                   &\quad \text{if inference step}
 \end{cases}$$
 where $q_i$ is the quantized representation of the $i$-th source, $e$ are the discrete latents in the codebook, $z$ is the output of encoder, and $e^*=e_{\operatorname{argmax}(y_i)}$.
 
 ## Multi-latent Quantization
 One limitation of the latent quantization approach is the restricted expressive power compared to continuous latent space approaches.
-To increase the expressive power, we could have increased the number of elements in a codebook.
-However, this method could raise memory issues.
-Instead, we use multiple codebooks and construct each $q_s$ with a combination of quantized vectors $e^{(h)}, (h \in [1,H])$, where h is the codebook index.
+To increase the number of source representations, we could have simply increased the number of elements in a codebook.
+Instead, we use a more memory-efficient way to increase expressive power. We use multiple codebooks and construct each $q_i$ with a combination of quantized vectors $(e^*){(h)} (h \in [1,H])$, where h is the codebook index.
 
 $$ q_i=[(e^*)^{(1)}, ..., (e^*)^{(H)}]$$ 
 
-In this approach, the expressive power of the source representations $q_i$ increase exponentially with the number of codebooks, whereas the number of elements in a codebook is linear with the expressive power.
+Through this approach, the number of available source representations increases exponentially with the total number of codebooks.
 
 ## Task definition
-### Selective source reconstruction
-When decomposed quantized representation $q$, which encoded from input condition vector $C$ and input mixture $\mathcal{M}(S,C)$, are given, we assume that each representation vector $q_{i}$ can fully represent each $s_i \cdot c_i$
-Therefore if we select some representations $q_{\{i, ...\}}$, they also have to fully represent $\mathcal{M}(S,X)$, where the selective condition ${X}$ is another condition vector.
 
-We apply this \textit{seletive source reconstruction task} to our model, where we aim to minimize the \textit{selective reconstruction loss}
-The selective source reconstruction loss, as follows:
-$$ \mathcal{L}_{select} = {\| \mathcal{M}(S,X \odot C)  - \hat{\mathcal{M}}(S,X \odot C) \|}_1^1$$ where $\hat{\mathcal{M}}(S,X \odot C)$ is a estimated audio through decoder network from selective condition $X$ and input condition $C$.
+When the input mixture $\mathcal{M}(S)$ is given, we want to obtain decomposed and quantized representations ${q_i}^{n}_{i=1}$.
+We assume that each decomposed representation vector $q_{i}$ can fully represent each $s_i$.
 
+If we select some representations from $[q_1, ..., q_n]$, they also have to represent $s_i$ that are chosen.
+For example, if we select $q_1$, $q_2$ and $q_4$, those are the representation of $\mathcal{M}(\{s_1, s_2, s_4\})$.
+We apply this \textit{seletive source reconstruction task} to our model, where we aim to minimize the \textit{selective reconstruction loss}.
+The selective source reconstruction loss can be formulated, as follows:
 
-### Complement source reconstruction task
-For a latent condition vector,  exists a latent condition where some are selected and the others are not.
-We call unselected ones the complement condition ${X}^c$ of selective condition $X$.
-When calculating the gradients through the selective latent reconstruction loss from $X$, there is no gradient to ${X}^c$.
-This lack of gradients only train model on $X$, not  ${X}^c$.
-To prevent this problem, we train our model with the \textit{complement source reconstruction task}, where we aims to minimize the \textit{complement loss}.
+$$ \mathcal{L}_{select} = {\| \mathcal{M}(S')  - \hat{\mathcal{M}}' \|}_1^1$$ 
+where $\hat{\mathcal{M}}'$ is estimated audio through decoder network from selected representation.
+
+When calculating the gradients through the selective latent reconstruction loss, there is no gradient for unselected representations.
+This lack of gradients is inefficient to train the model.
+To prevent this problem, we train our model with the \textit{complement source reconstruction task}, where we aim to minimize the \textit{complement loss}.
 The complement loss $\mathcal{L}_{compl}$ is defined as follows:
-$$ \mathcal{L}_{compl} = {\| \mathcal{M}(S,X^c \odot C)  - \hat{\mathcal{M}}(S,X^c \odot C) \|}_1^1$$
+$$ \mathcal{L}_{compl} = {\| \mathcal{M}(S'')  - \hat{\mathcal{M}}''\|}_1^1$$
+where $\hat{\mathcal{M}}''$ is estimated audio through decoder network from unselected representation.
 
-### STFT loss
-Only applying sample-level reconstruction loss, the model struggles to generate the high frequencies.
-To generate natural music, the model needs to be able to generate high-frequency parts.
-Therefore, it is necessary to make the model consider the high-frequency information.
-To give a frequency constraint to the model without adding any additional layers, we define an STFT loss as follows:
+We also conduct the STFT loss as auxiliary loss defined as follows:
 $$\mathcal{L}_{STFT} =
 \| \operatorname{STFT}(\mathcal{M}) - \operatorname{STFT}(\hat{\mathcal{M}}) \|_1^1$$
 We apply it to both $\mathcal{L}_{select}$ and $\mathcal{L}_{compl}$.
@@ -154,7 +149,7 @@ In Figure 2, each color means different sources and the dots are the decomposed 
 It can be examined that the latent vectors from the same sources tend to be clustered even though there is no constraint about the classification.
 It indicates that our method has learned source-aware representations.
 
-![tSNE and bass generation result](figs/Figure3.png){width=100%}
+![tSNE visualization of quantized vectors in multi-codebook(left) and bass generation result(right)](figs/Figure3.png){width=100%}
 
 To better understand that the vector quantization method affects to model's performance, we train a VAE and an Auto-Encoder with the same training framework and almost the same structure to produce representations of the same size.
 As a result, they reconstruct only the noise sound instead of the mixtures with their representation vectors.
